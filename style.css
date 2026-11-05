@@ -168,7 +168,10 @@ h1 { font-size: 40px; font-weight: 800; letter-spacing: -.03em; line-height: 1.1
   transform: translateY(100%); transition: transform .22s ease-out; display: flex; flex-direction: column; gap: 10px; }
 .sheet-wrap.open .sheet-bg { opacity: 1; }
 .sheet-wrap.open .sheet { transform: none; }
-.grip { width: 36px; height: 4px; border-radius: 2px; background: var(--line); margin: 0 auto 8px; flex: none; }
+.sheet-handle { position: sticky; top: -10px; z-index: 2; margin: -10px -22px 0; padding: 10px 8px 0; height: 44px;
+  background: var(--surface); display: flex; justify-content: center; touch-action: none; }
+.grip { width: 40px; height: 5px; border-radius: 3px; background: var(--line); margin-top: 2px; flex: none; }
+.sheet-x { position: absolute; right: 8px; top: 4px; width: 40px; height: 40px; color: var(--muted); }
 .sheet h2 { font-size: 24px; }
 .sheet p { margin: 0; }
 .sheet .center h2 { margin-top: 8px; }
@@ -199,14 +202,21 @@ textarea.paste { width: 100%; font: 14px/1.4 ui-monospace, Menlo, monospace; pad
 .field input { font: inherit; font-size: 17px; color: var(--on-bg); background: var(--bg); border: 1px solid var(--line); border-radius: 14px; padding: 14px; width: 100%; }
 .field input:focus { outline: 2px solid var(--primary); border-color: transparent; }
 .datecard { padding: 16px; display: flex; flex-direction: column; gap: 10px; }
-.date-pick { position: relative; display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 10px; padding: 10px 14px; margin: 0 -4px;
-  border-radius: 16px; background: var(--surface-v); cursor: pointer; }
+.date-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 10px; margin-top: -4px; }
 .date-big { font-size: 26px; font-weight: 700; letter-spacing: -.02em; }
 .date-rel { color: var(--primary); }
 .expired-text { color: var(--expired); }
-.date-change { margin-left: auto; display: inline-flex; align-items: center; gap: 4px; font-size: 13px; font-weight: 600; color: var(--primary); }
-.date-change .ic { width: 16px; height: 16px; }
-.date-pick input { position: absolute; inset: 0; width: 100%; height: 100%; opacity: 0; cursor: pointer; font-size: 16px; }
+.wheels { position: relative; display: flex; margin: 2px 0; user-select: none; -webkit-user-select: none; }
+.wheel-hl { position: absolute; left: 0; right: 0; top: 50%; transform: translateY(-50%); border-radius: 14px; background: var(--primary-c); pointer-events: none; }
+.wheel { position: relative; height: 100%; overflow-y: scroll; scroll-snap-type: y mandatory; scrollbar-width: none;
+  -webkit-overflow-scrolling: touch; overscroll-behavior: contain; }
+.wheel::-webkit-scrollbar { display: none; }
+.wheel.day { flex: .8; } .wheel.month { flex: 1.1; } .wheel.year { flex: 1; }
+.wheel-row { display: flex; align-items: center; justify-content: center; scroll-snap-align: center; font-size: 17px; font-weight: 500; cursor: pointer; }
+.wheel-row.sel { font-size: 22px; font-weight: 700; color: var(--on-primary-c); }
+.wheel-fade { position: absolute; left: 0; right: 0; height: 64px; pointer-events: none; }
+.wheel-fade.top { top: 0; background: linear-gradient(var(--surface), transparent); }
+.wheel-fade.bottom { bottom: 0; background: linear-gradient(transparent, var(--surface)); }
 .chips { display: flex; flex-wrap: wrap; gap: 8px; }
 .chips:empty { display: none; }
 .save-space { height: calc(env(safe-area-inset-bottom) + 96px); }

@@ -3,6 +3,7 @@ import { today, pretty, countdownTo, relative } from './dates.js';
 import { openScanner } from './scanner.js';
 import * as share from './share.js';
 import { icon, esc, leaf } from './ui.js';
+import { wheelsHtml, mountWheels } from './wheel.js';
 
 const app = document.getElementById('app');
 let draft = null;      // the item being added or edited (null = home screen)
@@ -169,15 +170,25 @@ function installHint() {
 
 // ───────────────────────────── bottom sheets ─────────────────────────────
 
+// A sheet closes by swiping it down, tapping ✕, tapping the dimmed area above it, or the phone's back button.
+
 function openSheet(html, onClose) {
   closeSheet();
   const el = document.createElement('div');
   el.className = 'sheet-wrap';
-  el.innerHTML = `<div class="sheet-bg" data-a="close-sheet"></div><div class="sheet" role="dialog" aria-modal="true"><div class="grip"></div>${html}</div>`;
+  el.innerHTML = `<div class="sheet-bg" data-a="close-sheet"></div>
+    <div class="sheet" role="dialog" aria-modal="true">
+      <div class="sheet-handle"><div class="grip"></div>
+        <button class="icon-btn sheet-x" data-a="close-sheet" aria-label="Close">${icon('close')}</button></div>
+      ${html}
+    </div>`;
   document.body.appendChild(el);
   requestAnimationFrame(() => el.classList.add('open'));
+  const s = el.querySelector('.sheet');
+  dragToClose(s);
   sheet = { el, onClose };
-  return el.querySelector('.sheet');
+  armBack();
+  return s;
 }
 
 function closeSheet() {
@@ -185,9 +196,52 @@ function closeSheet() {
   const { el, onClose } = sheet;
   sheet = null;
   onClose?.();
+  el.querySelector('.sheet').style.transform = '';
   el.classList.remove('open');
   setTimeout(() => el.remove(), 220);
 }
+
+/** Pull the sheet down to dismiss it, like a native bottom sheet. */
+function dragToClose(s) {
+  let startY = null, dy = 0, t0 = 0;
+  s.addEventListener('touchstart', (e) => {
+    // Only from the top of the sheet's content, so scrolling a long sheet still works.
+    // (The handle bar at the top always works.)
+    if ((s.scrollTop > 0 && !e.target.closest('.sheet-handle')) || e.target.closest('textarea, .wheels')) return;
+    startY = e.touches[0].clientY; dy = 0; t0 = Date.now();
+    s.style.transition = 'none';
+  }, { passive: true });
+  s.addEventListener('touchmove', (e) => {
+    if (startY == null) return;
+    dy = e.touches[0].clientY - startY;
+    if (dy < 0) { startY = null; s.style.transition = ''; s.style.transform = ''; return; } // pushing up: just scroll
+    e.preventDefault();
+    s.style.transform = `translateY(${dy}px)`;
+  }, { passive: false });
+  const end = () => {
+    if (startY == null) return;
+    startY = null;
+    s.style.transition = '';
+    const fast = dy / Math.max(1, Date.now() - t0) > 0.6;
+    if (dy > 110 || (fast && dy > 30)) closeSheet();
+    else s.style.transform = '';
+  };
+  s.addEventListener('touchend', end);
+  s.addEventListener('touchcancel', end);
+}
+
+// ───── phone back button / back swipe closes the top layer instead of leaving the app ─────
+
+let backEntry = false;
+function armBack() {
+  if (!backEntry) { history.pushState({ freshkeep: 1 }, ''); backEntry = true; }
+}
+window.addEventListener('popstate', () => {
+  backEntry = false;
+  if (sheet) closeSheet();
+  else if (draft) closeEdit();
+  if (sheet || draft) armBack();
+});
 
 function foodSheet(id) {
   const i = store.get().items.find((x) => x.id === id);
@@ -322,21 +376,18 @@ function finish(id, eaten, count) {
 // ───────────────────────────── add / edit ─────────────────────────────
 
 function openEdit(d) {
-  const wasHome = !draft;
   draft = { name: '', brand: null, barcode: null, image: null, date: today(), qty: 1, quality: null, ...d };
-  if (wasHome) history.pushState({ edit: true }, '');
+  armBack();
   renderEdit();
   window.scrollTo(0, 0);
 }
 
-function closeEdit(fromPop = false) {
+function closeEdit() {
   if (!draft) return;
   draft = null;
-  if (!fromPop) history.back();
   renderHome();
+  window.scrollTo(0, 0);
 }
-
-window.addEventListener('popstate', () => { if (draft) closeEdit(true); else closeSheet(); });
 
 function startScan() {
   openScanner('code', {
@@ -355,36 +406,53 @@ function startScan() {
   });
 }
 
-function dateCard(title, field, date, chips) {
-  const t = today();
-  return `<div class="card datecard">
+function dateCard(title, field, date) {
+  return `<div class="card datecard" data-card="${field}">
     <div class="muted small label">${title}</div>
-    <label class="date-pick">
-      <span class="date-big">${esc(pretty(date))}</span>
-      <span class="date-rel ${date < t ? 'expired-text' : ''}">${esc(relative(date, t))}</span>
-      <span class="date-change">${icon('edit')} Change</span>
-      <input type="date" value="${date}" data-field="${field}" aria-label="${esc(title)}">
-    </label>
-    <div class="chips">${chips}</div>
+    <div class="date-head">${dateHead(date)}</div>
+    ${wheelsHtml(field)}
+    <div class="chips">${chipsFor(field)}</div>
     <button class="btn tonal full" data-a="scan-date" data-field="${field}">${icon('camera')} Scan the printed date</button>
   </div>`;
+}
+
+function dateHead(date) {
+  const t = today();
+  return `<span class="date-big">${esc(pretty(date))}</span>
+    <span class="date-rel ${date < t ? 'expired-text' : ''}">${esc(relative(date, t))}</span>`;
+}
+
+/** Shortcut chips under each date: "Same as last" and "Today", or "Same as use by" and "Remove". */
+function chipsFor(field) {
+  const d = draft;
+  if (field === 'quality') {
+    return (d.quality !== d.date ? `<button class="chip" data-a="best-same">Same as use by</button>` : '') +
+      `<button class="chip" data-a="best-remove">${icon('close')} Remove</button>`;
+  }
+  return [
+    lastDate && !d.id && lastDate !== d.date ? `<button class="chip" data-a="same-last">${icon('replay')} Same as last · ${esc(pretty(lastDate))}</button>` : '',
+    d.date !== today() ? `<button class="chip" data-a="date-today">Today</button>` : '',
+  ].join('');
+}
+
+/** After a wheel moves: update the heading and chips in place, so the other wheels aren't disturbed. */
+function refreshDates() {
+  for (const card of app.querySelectorAll('[data-card]')) {
+    const field = card.dataset.card;
+    card.querySelector('.date-head').innerHTML = dateHead(draft[field]);
+    card.querySelector('.chips').innerHTML = chipsFor(field);
+  }
 }
 
 function renderEdit() {
   const d = draft;
   const advanced = store.get().settings.advanced;
-  const t = today();
-  const chips = [
-    lastDate && !d.id && lastDate !== d.date ? `<button class="chip" data-a="same-last">${icon('replay')} Same as last · ${esc(pretty(lastDate))}</button>` : '',
-    d.date !== t ? `<button class="chip" data-a="date-today">Today</button>` : '',
-  ].join('');
+  const scroll = window.scrollY;
   let best = '';
   if (advanced || d.quality) {
     best = !d.quality
       ? `<button class="btn outline big full" data-a="add-best">${icon('add')} Add a best-before date</button>`
-      : dateCard('Best before', 'quality', d.quality,
-        (d.quality !== d.date ? `<button class="chip" data-a="best-same">Same as use by</button>` : '') +
-        `<button class="chip" data-a="best-remove">${icon('close')} Remove</button>`);
+      : dateCard('Best before', 'quality', d.quality);
   }
   app.innerHTML = `
     <main class="edit">
@@ -408,7 +476,7 @@ function renderEdit() {
         <div class="grow"><div class="t">How many</div><div class="muted small">Same product, same date</div></div>
         ${stepper(d.qty, false, 'qty-minus', 'qty-plus', '', d.qty > 1)}
       </div>
-      ${dateCard(advanced ? 'Use by' : 'Date on the pack', 'date', d.date, chips)}
+      ${dateCard(advanced ? 'Use by' : 'Date on the pack', 'date', d.date)}
       ${best}
       <div class="save-space"></div>
     </main>
@@ -420,9 +488,11 @@ function renderEdit() {
     app.querySelector('[data-a=save]').disabled = !name.value.trim();
   });
   name.addEventListener('keydown', (e) => { if (e.key === 'Enter') name.blur(); });
-  app.querySelectorAll('input[type=date]').forEach((inp) => inp.addEventListener('change', () => {
-    if (inp.value) { draft[inp.dataset.field] = inp.value; renderEdit(); }
-  }));
+  for (const w of app.querySelectorAll('.wheels')) {
+    const field = w.dataset.field;
+    mountWheels(w, d[field], (v) => { if (draft) { draft[field] = v; refreshDates(); } });
+  }
+  window.scrollTo(0, scroll);
 }
 
 function save() {

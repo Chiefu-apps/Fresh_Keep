@@ -1,6 +1,6 @@
 // Offline support: keeps the app's files on the phone so it opens without internet.
 // Bump VERSION whenever you upload changed files so phones pick up the update.
-const VERSION = 'freshkeep-v1';
+const VERSION = 'freshkeep-v2';
 const FILES = [
   './',
   'index.html',
@@ -11,6 +11,7 @@ const FILES = [
   'js/share.js',
   'js/store.js',
   'js/ui.js',
+  'js/wheel.js',
   'vendor/barcode-detector.js',
   'vendor/zxing_reader.wasm',
   'vendor/qrcode.js',
